@@ -371,7 +371,7 @@ function mts_pda {
 
 	rv=0
 	i=0
-	#page="https://login.mts.ru/amserver/UI/Login?service=lk&goto=https://lk.ssl.mts.ru/"
+	
 	page="https://ip.mts.ru/selfcarepda/"
 	while [ "$rv" != "200" ]; do
 		curl -i -k -L -s -m $TIME_OUT "$page" \
@@ -400,8 +400,9 @@ function mts_pda {
 
 	done
 
-    #CSRFToken=`grep CSRFToken $tmp_file | sed -n -e 's/.*value="\(.*\)".*/\1/p'|head -n1`
+    # Пока проверка токеан не нужна
 
+    #CSRFToken=`grep CSRFToken $tmp_file | sed -n -e 's/.*value="\(.*\)".*/\1/p'|head -n1`
     #if [ -z "$CSRFToken" ]; then
     #    err "Can't get CSRFToken from $page"
     #fi
@@ -443,7 +444,9 @@ function mts_pda {
 
 	done
 
-    #errmsg=`grep small $tmp_file | sed -n -e 's/.*<small>\(.*\)<\/small>.*/\1/p'`
+    # Проверку на ошибку сделаем потом - надо моделировать ошибки
+	
+	#errmsg=`grep small $tmp_file | sed -n -e 's/.*<small>\(.*\)<\/small>.*/\1/p'`
     #if [ -n "$errmsg" ]; then
     #    err "$errmsg"
     #fi
@@ -456,45 +459,6 @@ function mts_pda {
 
 	rv=0
 	i=0
-	#page="https://login.mts.ru/profile/mobile/get"
-	#page="https://ihelper.mts.ru/selfcare/Services/get-balance.ashx?update=0"
-    #page="https://ihelper.mts.ru/selfcare/account-status.aspx"
-    
- #    page="https://login.mts.ru/profile/header?service=lk&style=2013&update"
-    
- #    tmp_file=/tmp/mts.response2
-
-	# while [ "$rv" != "200" ]; do
-	# 	curl -i -k -L -s -m $TIME_OUT "$page" \
- #            -c $tmp_cookie \
-	# 		-b $tmp_cookie \
-	# 		--user-agent $USER_AGENT > $tmp_file
-	# 	rv=$(resp "$tmp_file")
-
-	# 	if [ "$rv" != "200" ]; then
-	# 		case "$rv" in
-	# 			"999")
-	# 				err999
-	# 				;;
-	# 			"404")
-	# 				err404 "$page"
-	# 				;;
-	# 			*)
-	# 				sleep $ATTEMPTS_TIME_OUT
-	# 				let i=i+1
-	# 				;;
-	# 		esac
-	# 	fi
-
-	# 	if [ $i -ge $ATTEMPTS ]; then
-	# 		errATT
-	# 	fi	
-	# done
-	
-	#balance=`sed -n -e 's/.*balance":"\(.*\)","tariff.*/\1/p' $tmp_file`
-	#balance=`sed -n -e 's/.*<strong>\(.*\) .*<\/strong>.*/\1/p' $tmp_file`
-    #balance=`grep "Ваш баланс" $tmp_file | sed -n -e 's/.*>\(.*\)<\/a><a.*/\1/p' | cut -d' ' -f1`
-    #balance=`grep "Баланс: " $tmp_file | sed -n -e 's/.*>\(.*\)руб.<\/a><a.*/\1/p' | cut -d' ' -f1`
 
     ## Выбираем строку со словом Баланс
     ## Обрезаем регуляркой
@@ -510,6 +474,99 @@ function mts_pda {
 
 	rm -f $tmp_cookie
     #rm -f $tmp_file
+}
+
+function intertelecom_ua {
+	tmp_file=/tmp/intertelecom_ua.response
+	tmp_cookie=/tmp/intertelecom_ua.cookies
+
+	rv=0
+	i=0
+	page="https://assa.intertelecom.ua/ru/login/"
+	while [ "$rv" != "200" ]; do
+		curl -i -k -L -s -m $TIME_OUT "$page" \
+			-c $tmp_cookie \
+			--user-agent $USER_AGENT > $tmp_file
+
+		rv=$(resp "$tmp_file")
+		if [ "$rv" != "200" ]; then
+			case "$rv" in
+				"999")
+					err999
+					;;
+				"404")
+					err404 "$page"
+					;;
+				*)
+					sleep $ATTEMPTS_TIME_OUT
+					let i=i+1
+					;;
+			esac
+		fi
+
+		if [ $i -ge $ATTEMPTS ]; then
+			errATT
+		fi	
+
+	done
+
+	rv=0
+	i=0
+	
+	page="https://assa.intertelecom.ua/ru/login/"
+	
+	while [ "$rv" != "200" ]; do
+		curl -i -k -L -s -m $TIME_OUT "$page" \
+			-c $tmp_cookie \
+			-b $tmp_cookie \
+            -d "phone=$1&pass=$2&js=1" \
+            --user-agent $USER_AGENT > $tmp_file
+
+		rv=$(resp "$tmp_file")
+
+		if [ "$rv" != "200" ]; then
+			case "$rv" in
+				"999")
+					err999
+					;;
+				"404")
+					err404 "$page"
+					;;
+				*)
+					sleep $ATTEMPTS_TIME_OUT
+					let i=i+1
+					;;
+			esac
+		fi
+
+		if [ $i -ge $ATTEMPTS ]; then
+			errATT
+		fi	
+
+	done
+
+	errmsg=`grep -E "\"error\">(.*)" $tmp_file | sed -n -e 's/.*<p class="error">\(.*\)<\/p>.*/\1/p'`
+    if [ -n "$errmsg" ]; then
+       err "$errmsg"
+    fi
+  
+	rv=0
+	i=0
+
+    ## Выбираем строку со словом Сальдо
+    ## Обрезаем регуляркой
+    ## пробуем убрать лишние пробелы
+    ## заменяем запятую на точку, чтобы преобразование к числу прошло ОК
+    balance=`grep -A 2 -E ".*<td>Сальдо</td>.*" $tmp_file | tail -n 1 | awk '{print $1}'`
+
+	if [ $VERBOSE -eq 0 ]; then
+		echo $balance
+	else
+		echo intertelecom_ua $1 $balance
+	fi
+
+	rm -f $tmp_cookie
+    rm -f $tmp_file
 }
 
 
@@ -1201,6 +1258,9 @@ case "$voperator" in
 	;;
 	kyivstar)
 		kyivstar $vlogin $vpassword
+	;;
+	itc_ua)
+		intertelecom_ua $vlogin $vpassword
 	;;
 	*)
 		usage 1
