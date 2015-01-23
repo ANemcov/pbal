@@ -1,5 +1,10 @@
 pbal.sh — скрипт проверки состояния баланса сотовых операторов и итнернет провайдеров.  
 
+На 23.01.2015
+intertelecom.ua - itc_ua
+Corbina (Beeline-internet) - corbina
+МТС (через мобильные сайты) - mts_pda
+
 На 01.11.2012
 kyivstar.ua
 
