@@ -1,28 +1,35 @@
-pbal.sh — скрипт проверки состояния баланса сотовых операторов и итнернет провайдеров.  
+#**pbal.sh**
 
-На 23.01.2015
-intertelecom.ua - itc_ua
-Corbina (Beeline-internet) - corbina
-МТС (через мобильные сайты) - mts_pda
+##скрипт проверки состояния баланса сотовых операторов и итнернет провайдеров.  
 
-На 01.11.2012
-kyivstar.ua
+*На 23.01.2015*
 
-На 26.10.2012
-qiwi.ru
+- intertelecom.ua - itc_ua
+- Corbina (Beeline-internet) - corbina
+- МТС (через мобильные сайты) - mts_pda
 
-На 26.09.2011 поддерживаются следующие операторы:
-moscowsg.megafon.ru
-mts.ru
-beeline.ru
-mgts.ru
-onlime.ru
+*На 01.11.2012*
+
+- kyivstar.ua
+
+*На 26.10.2012*
+
+- qiwi.ru
+
+*На 26.09.2011 поддерживаются следующие операторы:*
+
+- moscowsg.megafon.ru
+- mts.ru
+- beeline.ru
+- mgts.ru
+- onlime.ru
 
 Зависимости:
-curl
-iconv
-sed
-awk
+
+- curl
+- iconv
+- sed
+- awk
 
 Установка:
 скопировать скрипт туда где удобно и сделать его исполняемым: chmod +x pbal.sh
