@@ -11,11 +11,12 @@ ATTEMPTS=1
 ATTEMPTS_TIME_OUT=30
 SILENT=0
 VERBOSE=0
+SHOW_ACC=0
 
 function resp {
 	if [ -r $1 ]; then
 		status_code=`head -n1 $1 | cut -d' ' -f2`
-		if [ "$status_code" == "302" ] || [ "$status_code" == "301" ]; then # may be it's header like cookie
+		if [ "$status_code" == "302" ] || [ "$status_code" == "301" ] || [ "$status_code" == "100" ]; then # may be it's header like cookie
 			status_code_new=`grep -e "^HTTP" $1 | tail -n1 | cut -d' ' -f2`
 			if [ -n "$status_code_new" ]; then 
 				echo $status_code_new
@@ -476,7 +477,7 @@ function mts_pda {
     #rm -f $tmp_file
 }
 
-function intertelecom_ua {
+function intertelecom_ua_old {
 	tmp_file=/tmp/intertelecom_ua.response
 	tmp_cookie=/tmp/intertelecom_ua.cookies
 
@@ -569,6 +570,119 @@ function intertelecom_ua {
     rm -f $tmp_file
 }
 
+function intertelecom_ua {
+	tmp_file=/tmp/intertelecom_ua.response
+	tmp_cookie=/tmp/intertelecom_ua.cookies
+
+	rv=0
+	i=0
+	page="https://services.intertelecom.ua/login/?lang=ru"
+	while [ "$rv" != "200" ]; do
+		curl -i -k -L -s -m $TIME_OUT "$page" \
+			-c $tmp_cookie \
+			--user-agent $USER_AGENT > $tmp_file
+
+		rv=$(resp "$tmp_file")
+		if [ "$rv" != "200" ]; then
+			case "$rv" in
+				"999")
+					err999
+					;;
+				"404")
+					err404 "$page"
+					;;
+				*)
+					sleep $ATTEMPTS_TIME_OUT
+					let i=i+1
+					;;
+			esac
+		fi
+
+		if [ $i -ge $ATTEMPTS ]; then
+			errATT
+		fi	
+
+	done
+
+	form_id=`cat /tmp/intertelecom_ua.response | grep "form_id" |tail -n 1|tr "=\"" "\n"|tail -n 2|head -n 1`
+	rv=0
+	i=0
+	
+	page="https://services.intertelecom.ua/login/password/"
+	
+	while [ "$rv" != "200" ]; do
+		curl -i -k -L -s -m $TIME_OUT "$page" \
+			-c $tmp_cookie \
+			-b $tmp_cookie \
+            -X POST \
+            -F "action=ongoing_password_check" \
+            -F "form_id=$form_id" \
+            -F "lang=ru" \
+            -F "back_page=" \
+            -F "subscriber_number$form_id=$1" \
+            -F "ongoing_password$form_id=$2" \
+            --user-agent $USER_AGENT > $tmp_file
+
+		rv=$(resp "$tmp_file")
+
+		if [ "$rv" != "200" ]; then
+			case "$rv" in
+				"999")
+					err999
+					;;
+				"404")
+					err404 "$page"
+					;;
+				*)
+					sleep $ATTEMPTS_TIME_OUT
+					let i=i+1
+					;;
+			esac
+		fi
+
+		if [ $i -ge $ATTEMPTS ]; then
+			errATT
+		fi	
+
+	done
+
+	errmsg=`grep -E "\"error\">(.*)" $tmp_file | sed -n -e 's/.*<p class="error">\(.*\)<\/p>.*/\1/p'`
+    if [ -n "$errmsg" ]; then
+       err "$errmsg"
+    fi
+  
+	rv=0
+	i=0
+
+    ## Выбираем строку со словом Сальдо
+    ## Обрезаем регуляркой
+    ## пробуем убрать лишние пробелы
+    ## заменяем запятую на точку, чтобы преобразование к числу прошло ОК
+    # balance=`grep -A 2 -E ".*<td>Сальдо</td>.*" $tmp_file | tail -n 1 | awk '{print $1}'`
+	balance=`grep "account_balance =" $tmp_file | head -n1 | cut -d'=' -f2 |cut -d',' -f1| cut -d' ' -f2`
+
+	nnn=`cat $tmp_file | grep -n "thumbnail" | head -n1| cut -d':' -f1`
+	acc=`cat $tmp_file | tail -n +$nnn | head -n7 | tail -n1 | awk '{split($0,a,","); print a[1]}'|cut -d'>' -f2`
+
+
+	if [ $VERBOSE -eq 0 ]; then
+		if [ $SHOW_ACC -eq 0 ]; then
+			echo $balance
+		else
+			echo $balance $acc
+		fi
+	else
+		if [ $SHOW_ACC -eq 0 ]; then
+			echo intertelecom_ua $1 $balance
+		else
+			echo intertelecom_ua $1 $balance $acc
+		fi
+	fi
+
+	rm -f $tmp_cookie
+    rm -f $tmp_file
+
+}
 
 function beeline {
 	tmp_file=/tmp/beeline.response
@@ -1165,16 +1279,18 @@ function djuice {
 }
 
 function usage {
-	echo "usage: $0 [-t{sec}] [-a{attempts}] [-T{sec_attempts}] [-s] [-v] [-h] {megafon|mts|beeline|mgts|onlime|qiwi|kyivstar} {login} [password]"
+	echo "usage: $0 [-t{sec}] [-a{attempts}] [-T{sec_attempts}] [-s] [-v] [-h] {megafon|mts|beeline|mgts|onlime|qiwi|kyivstar|itc_ua} {login} [password]"
 	echo "	-t Timeout for connections, default $TIME_OUT sec"
 	echo "	-a Attempts of conections, default $ATTEMPTS"
 	echo "	-T Sleep between attempts, default $ATTEMPTS_TIME_OUT"
 	echo "	-s Silent, don't show any errors"
+	echo "  -A Show account number (for itc_ua only)"
 	echo "	-v Verbose, show operator name and login before balance"
 	exit $1
 }
 
-while getopts "t:a:T:svh" optname; do
+
+while getopts "t:a:T:svh:A" optname; do
 	case "$optname" in
 		"t")
 			if ! [[ "$OPTARG" =~ ^[0-9]+$ ]]; then
@@ -1196,6 +1312,9 @@ while getopts "t:a:T:svh" optname; do
 			else
 				ATTEMPTS_TIME_OUT=$OPTARG
 			fi
+			;;
+		"A")
+			SHOW_ACC=1
 			;;
 		"s")
 			SILENT=1
@@ -1258,6 +1377,9 @@ case "$voperator" in
 	;;
 	kyivstar)
 		kyivstar $vlogin $vpassword
+	;;
+	itc_ua_old)
+		intertelecom_ua_old $vlogin $vpassword
 	;;
 	itc_ua)
 		intertelecom_ua $vlogin $vpassword
